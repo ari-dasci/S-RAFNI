@@ -15,7 +15,7 @@ If you use this implementation, please cite our publication.
 ## 4. How to use it
 
 ### 1. Data sets
-This algorithm can be used with the same data sets that we used or with any other data set. To use the same CIFAR10 and CIFAR100 data sets that we used, first download them from  and place them in the same folder as the code. For any other data set, it is necessary that they are in a folder with two sulfolders, train and test, that each contain one subfolder per class.
+This algorithm can be used with the same data sets that we used or with any other data set. To use the same CIFAR10 and CIFAR100 data sets that we used, first download them from [here](https://github.com/AnabelGRios/S-RAFNI/releases/tag/v1.0) and place them in the same folder as the code. For any other data set, it is necessary that they are in a folder with two sulfolders, train and test, that each contain one subfolder per class.
 
 ### 2. Hyperparameters
 The algorith has the following hyperparameters:
