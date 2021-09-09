@@ -3,8 +3,20 @@
 Official TensorFlow implementation of RAFNI.
 
 ## 1. Publication
-For more information, please read our publication.
-If you use this implementation, please cite our publication.
+For more information, please read our publication
+> Anabel Gómez-Ríos, Julián Luengo and Francisco Herrera, "A robust approach for deep neural networks in presence of label noise: relabelling and filtering instances during training"
+
+If you use this implementation, please cite our publication as:
+```
+@misc{gómezríos2021robust,
+      title={A robust approach for deep neural networks in presence of label noise: relabelling and filtering instances during training},
+      author={Anabel Gómez-Ríos and Julián Luengo and Francisco Herrera},
+      year={2021},
+      eprint={2109.03748},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
+}
+```
 
 ## 2. Requirements
 * TensorFlow >= 2.4
