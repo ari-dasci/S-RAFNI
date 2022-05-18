@@ -27,31 +27,30 @@ If you use this implementation, please cite our publication as:
 ## 4. How to use it
 
 ### 1. Data sets
-This algorithm can be used with the same data sets that we used or with any other data set. To use the same CIFAR10 and CIFAR100 data sets that we used, first download them from [here](https://github.com/AnabelGRios/S-RAFNI/releases/tag/v1.0) and place them in the same folder as the code. For any other data set, it is necessary that they are in a folder with two sulfolders, train and test, that each contain one subfolder per class.
+This algorithm can be used with the same data sets that we used or with any other data set. To use the same CIFAR10 and CIFAR100 data sets that we used, first download them from [here](https://github.com/ari-dasci/S-RAFNI/releases/tag/v2.0) and place them in the same folder as the code. For any other data set, it is necessary that they are in a folder with two sulfolders, train and test, that each contain one subfolder per class.
 
 ### 2. Hyperparameters
 The algorith has the following hyperparameters:
 ```
---image_dir = Path to the directory where the train and test set are located (excep cifar10 and cifar100). String
---batch_size = Batch size. Integer.
---epochs = Total number of epochs to train the network. Integer.
---epoch_threshold: Epoch threshold so that there is no change in the training set before that threshold and there is no removal before 1.5*epoch_threshold. Integer.
---prob_threshold: Probability threshold to use in the relabelling mechanism. Float.
+--image_dir: Path to the directory where the train and test set are located (excep cifar10 and cifar100). String
+--batch_size: Batch size. Integer.
+--epochs: Total number of epochs to train the network. Integer.
+--quantile_prob: Quantile to use for the probability threshold in the relabelling mechanism. Float.
 --record_length: Length of the record dictionary. Integer.
 --not_change_epochs: Number of epochs after a change during which there is not possible to change the label of that instance again nor remove it. Integer.
 --fine_tune: Whether to fine-tune the backbone network. Boolean.
 --save_names: Output file. String.
 --quantile_loss: Quantile to use for the loss threshold in the filtering mechanism. Float.
---backbone_network: Which backbone network to use. ResNet or EfficientNet. String.
+--backbone_network: Which backbone network to use. String.
 --data_set: Which data set to use. 'cifar10', 'cifar100' or 'other'. String.
---noise: Noise type to use when using cifar datasets. 'RA' for symmetric and 'AN' for asymmetric. String.
---rate: Noise rate to use when using cifar dataests. Integer.
+--n_type: Noise type to use when using cifar datasets. 'RA' for symmetric and 'AN' for asymmetric. String.
+--n_rate: Noise rate to use when using cifar dataests. Integer.
 ```
 
 ### 3. Run
 To run our algorithm for a hold-out use something similar to:
 ```
-python training.py --save_names=output.txt --epoch_threshold=5 --quantile_loss=0.96 --prob_threshold=0.6 --record_length=4 --not_change_epochs=3 --backbone_network=ResNet --data_set=cifar10 --noise=RA --rate=20 --epochs=10 --batch_size=128 --fine_tune
+python training.py --save_names=output.txt --quantile_loss=0.96 --quantile_prob=0.6 --record_length=2 --not_change_epochs=4 --backbone_network=ResNet --data_set=cifar10 --n_type=RA --n_rate=20 --epochs=10 --batch_size=128 --fine_tune
 ```
 
 To run a five-fold cross-validation, use the `noise5fcv.py` file.
