@@ -8,7 +8,7 @@ from load_data import *
 from collections import deque
 
 def add_change_in_dict(dict, key, new_class):
-    # The next line create a new item in the dictionary if key does not
+    # The next line creates a new item in the dictionary if key does not
     # exist in dict and change its value if it exists.
     # At this point, key and new_class are not tensors.
     dict[key] = new_class

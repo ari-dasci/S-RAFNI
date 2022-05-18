@@ -6,6 +6,13 @@ import tensorflow as tf
 from dictionaries import *
 from load_data import *
 from sklearn.mixture import GaussianMixture
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from statistics import NormalDist
+import os
+import tempfile
+import scipy.stats as stats
 
 # https://tensorflow.google.cn/guide/keras/train_and_evaluate?hl=zh-cn#part_ii_writing_your_own_training_evaluation_loops_from_scratch
 '''
@@ -16,30 +23,38 @@ Args:
     optimizer: optimizer to use. Instance of Keras Optimizer.
     epochs: number of epochs to train. Integer.
     global_batch_size: global batch size used during training. Integer.
-    prob_threshold: probability threshold to use in the relabelling mechanism. Float.
+    quantile_prob: quantile to use for the probability threshold in the relabelling mechanism. Float.
     changes_dict: dictionary containing the changes in the training set. Python dictionary.
     removals_dict: dictionary containing the removals in the training set. Python dictionary.
-    epoch_threshold: epoch threshold so that there is no change in the training set before
-        that threshold and there is no removal before 1.5*epoch_threshold. Integer.
     record_dict: dictionary containing the last predictions of the instances. Python dictionary.
+    not_change_dict: dictionary containing the instances that cannot be changed. Python dictionary.
+    record_length: length of the record dictionary. Integer.
     not_change_epochs: number of epochs after a change during which there is not possible
         to change the label of that instance again nor remove it. Integer.
     quantile_loss: quantile to use for the loss threshold in the filtering mechanism. Float.
 '''
 def fit(model, train_dataset, optimizer, epochs, global_batch_size,
-            prob_threshold, changes_dict, removals_dict,
-            epoch_threshold, record_dict, not_change_dict, record_length,
+            quantile_prob, changes_dict, removals_dict,
+            record_dict, not_change_dict, record_length,
             not_change_epochs, quantile_loss):
 
     epoch = 0
 
     threshold_mean_loss = 0
     previous_threshold_mean_loss = 0
-    apply_loss_thres = True
+    apply_thresholds = True
+    overlap = 1
+    previous_overlap = 1
+    start_rafni = False
+    previous_prob_threshold = 1
+    prob_threshold = 1
 
-    while epoch <= epochs:
+    areas = []
+
+    while epoch < epochs:
         print('Start of epoch %d' % (epoch,))
         losses_epoch = []
+        prob_bad_epoch = []
 
         # Iterate over the batches of the dataset
         for step, (fn_batch_train, x_batch_train, y_batch_train) in enumerate(train_dataset):
@@ -64,7 +79,8 @@ def fit(model, train_dataset, optimizer, epochs, global_batch_size,
             # Open a GradientTape to record the operations run during the
             # forward pass, which enables autodifferentiation,
             with tf.GradientTape() as tape:
-
+                # for selfie
+                # l2_loss = tf.math.add_n([tf.nn.l2_loss(var) for var in model.trainable_variables])
                 # Run the forwards pass of the layer.
                 # The operations that the layer applies to its inputs are
                 # going to be recorded on the GradientTape.
@@ -79,11 +95,17 @@ def fit(model, train_dataset, optimizer, epochs, global_batch_size,
                 # Get the losses of the batch inside the losses_epoch list
                 losses_epoch.extend(losses)
 
+                # Get the probabilities of the misclassified samples
+                for idx in range(len(logits)):
+                    ny = ny_batch_train.numpy()
+                    if np.argmax(logits[idx]) != np.argmax(ny[idx]):
+                        prob_bad_epoch.append(np.max(logits[idx]))
+
                 ls_array = np.array(losses)
 
                 # Use the loss of each sample:
                 # 1. to restore the original class
-                if epoch >= epoch_threshold:
+                if start_rafni:
                     # Check if it is necessary to change the label of any instance
                     check_high_prob_wrong_label(nfn_batch_train, ny_batch_train,
                                                 logits, changes_dict, prob_threshold,
@@ -96,7 +118,6 @@ def fit(model, train_dataset, optimizer, epochs, global_batch_size,
                     check_record(nfn_batch_train, record_dict, removals_dict,
                                     record_length, changes_dict)
                 # 2. to filter instances
-                if epoch >= 1.5*epoch_threshold:
                     for idx in range(len(losses)):
                         if (losses[idx] > threshold_mean_loss
                             and nfn_batch_train[idx].numpy() not in not_change_dict):
@@ -129,10 +150,20 @@ def fit(model, train_dataset, optimizer, epochs, global_batch_size,
 
         losses_epoch = np.array(losses_epoch)
 
-        # Set the noisy losses' mean, std and threshold
-        if apply_loss_thres:
+        # Modify loss and probability thresholds
+        if apply_thresholds:
+
+            # Probability threshold (if there are misclassified samples)
+            if len(prob_bad_epoch) != 0:
+                prob_bad_epoch = np.array(prob_bad_epoch)
+                previous_prob_threshold = prob_threshold
+                prob_threshold = np.quantile(prob_bad_epoch, quantile_prob)
+                print('Prob threshold')
+                print(prob_threshold)
+
+            # Loss threshold
             previous_threshold_mean_loss = threshold_mean_loss
-            gm = GaussianMixture(n_components=2, warm_start = True).fit(losses_epoch.reshape(-1,1))
+            gm = GaussianMixture(n_components=2, warm_start = True, tol = 0.1, reg_covar = 0.15).fit(losses_epoch.reshape(-1,1))
             noisy_distribution_idx = np.argmax(gm.means_)
             normal_distribution_idx = np.argmin(gm.means_)
             noisy_losses_mean = gm.means_[noisy_distribution_idx][0]
@@ -142,12 +173,19 @@ def fit(model, train_dataset, optimizer, epochs, global_batch_size,
             normal_losses_mean = gm.means_[normal_distribution_idx][0]
             normal_losses_std = gm.covariances_[normal_distribution_idx][0][0]
 
-            if (epoch >= 1.5*epoch_threshold and ((noisy_losses_mean - normal_losses_mean <= 0.3)
-                or (noisy_losses_mean - 4 * noisy_losses_std > threshold_mean_loss)
-                or (previous_threshold_mean_loss - threshold_mean_loss) > 0.25)):
-                apply_loss_thres = False
+            previous_overlap = overlap
+            overlap = NormalDist(mu = normal_losses_mean, sigma = normal_losses_std).overlap(NormalDist(mu = noisy_losses_mean, sigma = noisy_losses_std))
+            areas.append(overlap)
+            if start_rafni == False and (overlap < 0.15 or (epoch !=0 and previous_overlap < overlap)):
+                start_rafni = True
+                print("Epoch threshold: " + str(epoch+1))
+
+            if (start_rafni and ((noisy_losses_mean - normal_losses_mean <= 0.3))):
+                apply_thresholds = False
                 threshold_mean_loss = previous_threshold_mean_loss
+                prob_threshold = previous_prob_threshold
 
         epoch = epoch + 1
 
+    print(areas)
     return model, changes_dict, removals_dict

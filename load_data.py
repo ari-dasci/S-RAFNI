@@ -27,6 +27,8 @@ def get_filename(file_path):
 def decode_img(img):
     # Convert the compressed string to a 3D uint8 tensor
     img = tf.image.decode_jpeg(img, channels = 3)
+    # Use 'convert_image_dtype' to convert to floats in the [0,1] range
+    # img = tf.image.convert_image_dtype(img, tf.float32)
     # Resize the image to the desired size
     return tf.image.resize(img, [224, 224])
 
@@ -42,7 +44,10 @@ def prepare_for_training(ds, batch_size, cache = True, shuffle_buffer_size = 500
 
     ds = ds.shuffle(buffer_size = shuffle_buffer_size)
 
-    ds = ds.batch(batch_size)
+    # Repeat forever
+    # ds = ds.repeat()
+
+    ds = ds.batch(batch_size) #, drop_remainder = True)
 
     # Data augmentation
     if data_aug:
@@ -133,15 +138,19 @@ def load_train_test_cifar(path_name, batch_size, noise = None, rate = 0,
     test_data = np.load(test_data).astype(np.float32)
     test_labels = np.load(test_labels)
 
+    fn_train = []
+    [fn_train.append(str(train_labels[i]) + '_' + str(i)) for i in range(len(train_labels))]
+    fn_train = np.array(fn_train)
+    fn_test = []
+    [fn_test.append(str(test_labels[i]) + '_' + str(i)) for i in range(len(test_labels))]
+    fn_test = np.array(fn_test)
+
     train_labels = tf.keras.utils.to_categorical(train_labels)
     test_labels = tf.keras.utils.to_categorical(test_labels)
-
-    fn_train = np.arange(len(train_data))
-    fn_test = np.arange(len(test_data))
 
     train_ds = tf.data.Dataset.from_tensor_slices((fn_train, train_data, train_labels))
     test_ds = tf.data.Dataset.from_tensor_slices((fn_test, test_data, test_labels))
 
     train_ds =  prepare_for_training(train_ds, batch_size, cache = cache,
-                                                shuffle_buffer_size = 48000, data_aug = data_aug)
+                                                shuffle_buffer_size = 50000, data_aug = data_aug)
     return train_ds, test_ds
