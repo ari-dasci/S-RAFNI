@@ -30,7 +30,7 @@ def eight_layer(num_classes):
 
     # Block 2
     x = Conv2D(128, (3, 3), padding = 'same', kernel_initializer = 'he_normal',
-                name = 'block2_conv1')(img_input)
+                name = 'block2_conv1')(x)
     x = BatchNormalization()(x)
     x = Activation('relu')(x)
     x = Conv2D(128, (3, 3), padding = 'same', kernel_initializer = 'he_normal',
@@ -41,7 +41,7 @@ def eight_layer(num_classes):
 
     # Block 3
     x = Conv2D(196, (3, 3), padding = 'same', kernel_initializer = 'he_normal',
-                name = 'block3_conv1')(img_input)
+                name = 'block3_conv1')(x)
     x = BatchNormalization()(x)
     x = Activation('relu')(x)
     x = Conv2D(196, (3, 3), padding = 'same', kernel_initializer = 'he_normal',

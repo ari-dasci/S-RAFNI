@@ -35,7 +35,7 @@ def decode_img(img):
 # shuffle_buffer_size should be greater than or equal to the full size of the
 # dataset.
 def prepare_for_training(ds, batch_size, cache = True, shuffle_buffer_size = 50000,
-                            data_aug = False):
+                            data_aug = False, model = 'ResNet'):
     if cache:
         if isinstance(cache, str):
             ds = ds.cache(cache)
@@ -51,11 +51,23 @@ def prepare_for_training(ds, batch_size, cache = True, shuffle_buffer_size = 500
 
     # Data augmentation
     if data_aug:
-        data_augmentation = tf.keras.Sequential([
-            tf.keras.layers.experimental.preprocessing.RandomFlip("horizontal"),
-            tf.keras.layers.experimental.preprocessing.RandomZoom(height_factor = (-0.1, 0),
-                                                            width_factor = (-0.1, 0)),
-        ])
+        if model == 'ResNet32' or model == 'ResNet44':
+            data_augmentation = tf.keras.Sequential([
+                tf.keras.layers.experimental.preprocessing.RandomFlip("horizontal"),
+                tf.keras.layers.experimental.preprocessing.RandomRotation(factor = 0.06),
+                tf.keras.layers.experimental.preprocessing.RandomTranslation(height_factor = 0.2,
+                        width_factor = 0.2, fill_mode = 'reflect'), # it was 0.1 for patrini
+                #tf.keras.layers.experimental.preprocessing.RandomHeight((0, 0.1)),
+                #tf.keras.layers.experimental.preprocessing.RandomWidth((0, 0.1)),
+                #tf.keras.layers.experimental.preprocessing.RandomZoom(height_factor = (-0.1, 0),
+                #                                                width_factor = (-0.1, 0)),
+            ])
+        elif model == 'D2LC10':
+            data_augmentation = tf.keras.Sequential([
+                tf.keras.layers.experimental.preprocessing.RandomTranslation(height_factor = 0.2,
+                        width_factor = 0.2, fill_mode = 'reflect'),
+                tf.keras.layers.experimental.preprocessing.RandomFlip('horizontal'),
+            ])
         ds = ds.map(lambda z, x, y: (z, data_augmentation(x, training = True), y),
                 num_parallel_calls = tf.data.experimental.AUTOTUNE)
 
@@ -122,7 +134,7 @@ Args:
     cache: Whether to cache the data set. Boolean.
 '''
 def load_train_test_cifar(path_name, batch_size, noise = None, rate = 0,
-                            data_aug = False, cache = True):
+                            data_aug = False, cache = True, model = 'ResNet'):
     if noise is not None:
         train_data = path_name + '_train_data_' + noise + str(rate) + '.npy'
         train_labels = path_name + '_train_labels_' + noise + str(rate) + '.npy'
@@ -138,19 +150,28 @@ def load_train_test_cifar(path_name, batch_size, noise = None, rate = 0,
     test_data = np.load(test_data).astype(np.float32)
     test_labels = np.load(test_labels)
 
+    # Subtracting per-pixel mean for ResNet32 and 44 models (specifically designed for CIFAR)
+    if model == 'ResNet32' or model == 'ResNet44' or model == 'D2LC10':
+        means = train_data.mean(axis = 0)
+        train_data = (train_data - means)
+        test_data = (test_data - means)
+    if model == 'DenseNet':
+        train_data = tf.image.per_image_standardization(train_data)
+        test_data = tf.image.per_image_standardization(test_data)
+
     fn_train = []
-    [fn_train.append(str(train_labels[i]) + '_' + str(i)) for i in range(len(train_labels))]
+    [fn_train.append(str(train_labels[i][0]) + '_' + str(i)) for i in range(len(train_labels))]
     fn_train = np.array(fn_train)
+    print(fn_train)
     fn_test = []
-    [fn_test.append(str(test_labels[i]) + '_' + str(i)) for i in range(len(test_labels))]
+    [fn_test.append(str(test_labels[i][0]) + '_' + str(i)) for i in range(len(test_labels))]
     fn_test = np.array(fn_test)
 
     train_labels = tf.keras.utils.to_categorical(train_labels)
     test_labels = tf.keras.utils.to_categorical(test_labels)
-
     train_ds = tf.data.Dataset.from_tensor_slices((fn_train, train_data, train_labels))
     test_ds = tf.data.Dataset.from_tensor_slices((fn_test, test_data, test_labels))
 
     train_ds =  prepare_for_training(train_ds, batch_size, cache = cache,
-                                                shuffle_buffer_size = 50000, data_aug = data_aug)
+                                                shuffle_buffer_size = 50000, data_aug = data_aug, model = model)
     return train_ds, test_ds

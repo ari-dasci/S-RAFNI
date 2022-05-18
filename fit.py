@@ -14,6 +14,23 @@ import os
 import tempfile
 import scipy.stats as stats
 
+os.environ['MPLCONFIGDIR'] = tempfile.gettempdir()
+
+# Symmetric cross entropy loss (for D2L)
+def symmetric_cross_entropy(alpha, beta):
+    def loss(y_true, y_pred):
+        y_true_1 = y_true
+        y_pred_1 = y_pred
+
+        y_true_2 = y_true
+        y_pred_2 = y_pred
+
+        y_pred_1 = tf.clip_by_value(y_pred_1, 1e-7, 1.0)
+        y_true_2 = tf.clip_by_value(y_true_2, 1e-4, 1.0)
+
+        return alpha*(-tf.reduce_sum(y_true_1 * tf.math.log(y_pred_1), axis = -1)) + beta*(-tf.reduce_sum(y_pred_2 * tf.math.log(y_true_2), axis = -1))
+    return loss
+
 # https://tensorflow.google.cn/guide/keras/train_and_evaluate?hl=zh-cn#part_ii_writing_your_own_training_evaluation_loops_from_scratch
 '''
 Function to fit the model.
@@ -27,8 +44,6 @@ Args:
     changes_dict: dictionary containing the changes in the training set. Python dictionary.
     removals_dict: dictionary containing the removals in the training set. Python dictionary.
     record_dict: dictionary containing the last predictions of the instances. Python dictionary.
-    not_change_dict: dictionary containing the instances that cannot be changed. Python dictionary.
-    record_length: length of the record dictionary. Integer.
     not_change_epochs: number of epochs after a change during which there is not possible
         to change the label of that instance again nor remove it. Integer.
     quantile_loss: quantile to use for the loss threshold in the filtering mechanism. Float.
@@ -73,7 +88,10 @@ def fit(model, train_dataset, optimizer, epochs, global_batch_size,
 
             new_batch_size = len(nfn_batch_train)
             # Define loss function without reduction
-            loss_fn = tf.keras.losses.CategoricalCrossentropy(from_logits = True,
+            if model == 'D2LC10' or model == 'ResNet44':
+                loss_fn = symmetric_cross_entropy(alpha = 0.1, beta = 1.0)
+            else:
+                loss_fn = tf.keras.losses.CategoricalCrossentropy(from_logits = True,
                                     reduction = tf.keras.losses.Reduction.NONE)
 
             # Open a GradientTape to record the operations run during the
@@ -130,6 +148,7 @@ def fit(model, train_dataset, optimizer, epochs, global_batch_size,
                     loss_value = tf.reduce_sum(losses * (1. / new_batch_size))
                 else:
                     loss_value = tf.reduce_sum(losses * (1. / global_batch_size))
+                # loss_value = tf.reduce_mean(losses) + 0.0005*l2_loss
 
             # Use the gradient tape to automatically retrieve the gradients
             # of the trainable variables with respect to the loss.
@@ -176,14 +195,16 @@ def fit(model, train_dataset, optimizer, epochs, global_batch_size,
             previous_overlap = overlap
             overlap = NormalDist(mu = normal_losses_mean, sigma = normal_losses_std).overlap(NormalDist(mu = noisy_losses_mean, sigma = noisy_losses_std))
             areas.append(overlap)
-            if start_rafni == False and (overlap < 0.15 or (epoch !=0 and previous_overlap < overlap)):
-                start_rafni = True
-                print("Epoch threshold: " + str(epoch+1))
 
             if (start_rafni and ((noisy_losses_mean - normal_losses_mean <= 0.3))):
+                print(noisy_losses_mean - normal_losses_mean)
                 apply_thresholds = False
                 threshold_mean_loss = previous_threshold_mean_loss
                 prob_threshold = previous_prob_threshold
+
+            if start_rafni == False and (overlap < 0.15 or (epoch !=0 and previous_overlap < overlap)):
+                start_rafni = True
+                print("Epoch threshold: " + str(epoch+1))
 
         epoch = epoch + 1
 

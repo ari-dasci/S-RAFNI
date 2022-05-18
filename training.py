@@ -23,10 +23,8 @@ Args:
     fine_tune: Whether to fine-tune the backbone network. Boolean.
     save_names: Output file. String.
     quantile_loss: Quantile to use for the loss threshold in the filtering mechanism. Float.
-    fold: Fold number in the cross-validation. Integer.
-    backbone_network: Which backbone network to use. String.
-    n_type: Type of noise to use with CIFAR. RA for symmetric and AN for asymmetric. String.
-    n_rate: Noise rate to use with CIFAR. Integer.
+    fold: Number of fold in the cross-validation. Integer.
+    backbone_network: Which backbone network to use. ResNet or EfficientNet. String.
 '''
 def train(image_dir, batch_size, epochs,
             quantile_prob, record_length, not_change_epochs,
@@ -34,8 +32,8 @@ def train(image_dir, batch_size, epochs,
             backbone_network = 'ResNet', n_type = None, n_rate = 20):
 
     if image_dir == 'cifar10' or image_dir == 'cifar100':
-        labeled_train_ds, labeled_test_ds = load_train_test_cifar('data/' + image_dir + '_grid',
-                                                batch_size, noise = n_type, rate = n_rate, data_aug = True)
+        labeled_train_ds, labeled_test_ds = load_train_test_cifar('data/' + image_dir,
+                                                batch_size, noise = n_type, rate = n_rate, data_aug = True, model = backbone_network)
         if image_dir == 'cifar10':
             num_classes = 10
         else:
@@ -63,7 +61,7 @@ def train(image_dir, batch_size, epochs,
         model = resnet_preact(5, 0.0001, 10)
     elif backbone_network == 'ResNet44':
         model = resnet_preact(7, 0.001, 100)
-    elif backbone_network == 'Densenet':
+    elif backbone_network == 'DenseNet':
         model = densenet(25, 12, num_classes)
     elif backbone_network == 'D2LC10':
         model = eight_layer(num_classes)
@@ -102,16 +100,15 @@ def train(image_dir, batch_size, epochs,
         opt = tf.keras.optimizers.SGD(lr = 1e-3, decay = 1e-6, momentum = 0.9,
                                         nesterov = True)
     elif backbone_network == 'ResNet32':
-        #opt = tf.keras.optimizers.SGD(lr = 1e-03, decay = 1e-6, momentum = 0.9, nesterov = True)
         opt = tf.keras.optimizers.SGD(learning_rate = CustomScheduleC10(0.1), decay = 0.0,
                                         momentum = 0.9)
     elif backbone_network == 'ResNet44':
-        opt = tf.keras.optimizers.SGD(learning_rate = CustomScheduleC100(0.1), decay = 0.0,
+        opt = tf.keras.optimizers.SGD(learning_rate = CustomScheduleC100(0.1), decay = 5e-3, #it was 0.0 for patrini
                                         momentum = 0.9)
     elif backbone_network == 'D2LC10':
         opt = tf.keras.optimizers.SGD(learning_rate = CustomScheduleC10(0.1), decay = 1e-4,
                                         momentum = 0.9)
-    elif backbone_network == 'Densenet':
+    elif backbone_network == 'DenseNet':
         boundaries = [int(np.ceil(50000/128)*50), int(np.ceil(50000/128)*75)]
         values = [0.1, 0.02, 0.004]
         opt = tf.keras.optimizers.SGD(learning_rate = tf.keras.optimizers.schedules.PiecewiseConstantDecay(
